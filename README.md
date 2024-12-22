@@ -35,7 +35,7 @@ python main.py
 ### MyFSMetadata
 ```python
 class MyFSMetadata:
-    ```
+```
 Stores filesystem metadata including machine ID, creation date, file count, and file information
 Maintains the master encryption key
 Gets unique machine identifier for security binding
