@@ -112,20 +112,160 @@ class MyFS:
         # Compare with stored hash (implementation needed)
         return True  # Placeholder
 
-# Additional functions to be implemented:
-# - import_file()
-# - export_file()
-# - delete_file()
-# - list_files()
-# - set_file_password()
-# - change_fs_password()
+def import_file(self, file_path: str, encrypt: bool = False) -> bool:
+    """Import a file into MyFS"""
+    if self.metadata.file_count >= self.MAX_FILES:
+        return False
+        
+    try:
+        file_name = os.path.basename(file_path)
+        file_size = os.path.getsize(file_path)
+        
+        # Create file entry
+        entry = FileEntry(file_name, file_size, file_path)
+        
+        # Generate file key if encryption requested
+        if encrypt:
+            entry.file_key = Fernet.generate_key()
+            entry.is_encrypted = True
+            
+        # Read and write file data
+        with open(self.fs_path, 'ab') as fs_file, open(file_path, 'rb') as source_file:
+            entry.offset = fs_file.tell()
+            data = source_file.read()
+            
+            if encrypt:
+                f = Fernet(entry.file_key)
+                data = f.encrypt(data)
+                
+            fs_file.write(data)
+            
+        # Update metadata
+        self.metadata.files[file_name] = entry.__dict__
+        self.metadata.file_count += 1
+        self._save_metadata(self.current_password)
+        return True
+    except:
+        return False
+
+def export_file(self, file_name: str, dest_path: str) -> bool:
+    """Export a file from MyFS"""
+    if file_name not in self.metadata.files:
+        return False
+        
+    try:
+        entry = self.metadata.files[file_name]
+        with open(self.fs_path, 'rb') as fs_file, open(dest_path, 'wb') as dest_file:
+            fs_file.seek(entry['offset'])
+            data = fs_file.read(entry['size'])
+            
+            if entry['is_encrypted']:
+                f = Fernet(bytes.fromhex(entry['file_key']))
+                data = f.decrypt(data)
+                
+            dest_file.write(data)
+        return True
+    except:
+        return False
+
+def delete_file(self, file_name: str) -> bool:
+    """Delete a file from MyFS"""
+    if file_name not in self.metadata.files:
+        return False
+        
+    del self.metadata.files[file_name]
+    self.metadata.file_count -= 1
+    self._save_metadata(self.current_password)
+    return True
+
+def list_files(self) -> List[Dict]:
+    """List all files in MyFS"""
+    return [
+        {
+            'name': name,
+            'size': info['size'],
+            'encrypted': info['is_encrypted'],
+            'created': info['creation_time']
+        }
+        for name, info in self.metadata.files.items()
+    ]
+
+def set_file_password(self, file_name: str, password: str) -> bool:
+    """Set password for specific file"""
+    if file_name not in self.metadata.files:
+        return False
+        
+    try:
+        entry = self.metadata.files[file_name]
+        key = hashlib.pbkdf2_hmac('sha256', password.encode(), b'salt', 100000)
+        entry['file_key'] = key.hex()
+        self._save_metadata(self.current_password)
+        return True
+    except:
+        return False
+
+def change_fs_password(self, old_password: str, new_password: str) -> bool:
+    """Change filesystem password"""
+    try:
+        # Verify old password
+        key = hashlib.pbkdf2_hmac('sha256', old_password.encode(), b'salt', 100000)
+        f = Fernet(key)
+        
+        with open(self.metadata_path, 'rb') as file:
+            f.decrypt(file.read())
+            
+        self.current_password = new_password
+        self._save_metadata(new_password)
+        return True
+    except:
+        return False
 
 def main():
-    fs = MyFS('myfs.Dat', 'metadata.dat')
-    if not fs.is_initialized:
-        fs.format_fs('password123')
+    # Create MyFS instance
+    fs = MyFS('myfs.dat', 'metadata.dat')
     
-    if fs.is_valid_machine() and fs.verify_program_integrity():
-        print('MyFS is ready to use!')
-    else:
-        print('MyFS is not ready to use!')
+    # Initialize with password
+    password = input("Enter password to create filesystem: ")
+    if not fs.format_fs(password):
+        print("Failed to create filesystem")
+        return
+        
+    # Basic command loop
+    while True:
+        cmd = input("\nEnter command (import/export/delete/list/exit): ").lower()
+        
+        if cmd == 'exit':
+            break
+        elif cmd == 'import':
+            path = input("Enter file path: ")
+            encrypt = input("Encrypt file? (y/n): ").lower() == 'y'
+            if fs.import_file(path, encrypt):
+                print("File imported successfully")
+            else:
+                print("Import failed")
+        elif cmd == 'export':
+            name = input("Enter filename: ")
+            dest = input("Enter destination path: ")
+            if fs.export_file(name, dest):
+                print("File exported successfully")
+            else:
+                print("Export failed")
+        elif cmd == 'delete':
+            name = input("Enter filename: ")
+            if fs.delete_file(name):
+                print("File deleted successfully")
+            else:
+                print("Delete failed")
+        elif cmd == 'list':
+            files = fs.list_files()
+            for f in files:
+                print(f"\n{f['name']}")
+                print(f"Size: {f['size']} bytes")
+                print(f"Encrypted: {f['encrypted']}")
+                print(f"Created: {f['created']}")
+        else:
+            print("Invalid command")
+
+if __name__ == '__main__':
+    main()
+
