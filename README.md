@@ -90,10 +90,12 @@ def change_fs_password(self, old_password: str, new_password: str) -> bool:
 - Handles filesystem password changes
 
 ## Security Features Implemented
+```
 ✅ Encrypted metadata storage
 ✅ Program integrity verification
 ✅ Password protection
 ✅ Machine binding
 ✅ File-level encryption
 ✅ OTP verification
+```
 The implementation creates a secure filesystem with encrypted storage, machine binding, and multiple layers of security verification.
